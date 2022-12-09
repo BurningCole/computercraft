@@ -41,14 +41,17 @@ print(w,h,l);
 for i=1,yOff do
 	turtle.down()
 end
+
+--TODO
+function refuel()
+	print("do later");
+end
+
 local inSlot = turtle.getItemDetail(1);
 local left = peripheral.wrap("left");
 local fortuneEquipped = (string.sub(inSlot.name,1,6) ~= "turtle");
 
-function dig()
-	local detected,data = turtle.inspect();
-	if(detected == false)then return; end
-	local digF = turtle.dig;
+function checkFortune(data, mineFuncTrue, mineFuncFalse)
 	local fortuneF = false;
 	for k,ore in ipairs(fortune) do
 		if(data.name:match(ore.."$")) then
@@ -62,7 +65,7 @@ function dig()
 				end
 			end
 			fortuneF = true;
-			digF = function() return left.swing("block"); end
+			return mineFuncTrue;
 			break;
 		end
 	end
@@ -70,9 +73,17 @@ function dig()
 		turtle.select(1);
 		turtle.equipLeft();
 		fortuneEquipped = false;
+		return mineFuncFalse;
 	end
+end
+
+function dig()
+	local detected,data = turtle.inspect();
+	if(detected == false)then return; end
+	local digF = checkFortune(data, function () return left.swing("block"); end, turtle.dig);
 	while(turtle.detect()) do
 		local success,reason = digF();
+		local success,reason = turtle.dig();
 		if(success == false) then
 			h=0
 			print(reason)
@@ -85,29 +96,7 @@ end
 function digDown()
 	local detected,data = turtle.inspectDown();
 	if(detected == false)then return; end
-	local digF = turtle.digDown;
-	local fortuneF = false;
-	for k,ore in ipairs(fortune) do
-		if(data.name:match(ore.."$")) then
-			if(not fortuneEquipped) then
-				turtle.select(1);
-				turtle.equipLeft();
-				turtle.select(2);
-				fortuneEquipped = true;
-				if(left == nil) then
-					left = peripheral.wrap("left");
-				end
-			end
-			fortuneF = true;
-			digF = function () return left.swing("block","down"); end
-			break;
-		end
-	end
-	if(fortuneEquipped and not fortuneF) then
-		turtle.select(1);
-		turtle.equipLeft();
-		fortuneEquipped = false;
-	end
+	local digF = checkFortune(data, function () return left.swing("block","down"); end, turtle.digDown);
 	while(turtle.detectDown()) do
 		local success,reason = digF()
 		if(success == false) then
@@ -121,29 +110,7 @@ end
 function digUp()
 	local detected,data = turtle.inspectUp();
 	if(detected == false)then return; end
-	local digF = turtle.digUp;
-	local fortuneF = false;
-	for k,ore in ipairs(fortune) do
-		if(data.name:match(ore.."$")) then
-			if(not fortuneEquipped) then
-				turtle.select(1);
-				turtle.equipLeft();
-				turtle.select(2);
-				fortuneEquipped = true;
-				if(left == nil) then
-					left = peripheral.wrap("left");
-				end
-				fortuneF = true;
-				digF = left.swing("block","up");
-				break;
-			end
-		end
-	end
-	if(fortuneEquipped and not fortuneF) then
-		turtle.select(1);
-		turtle.equipLeft();
-		fortuneEquipped = false;
-	end
+	local digF = checkFortune(data, function () return left.swing("block","up"); end, turtle.digUp);
 	while (turtle.detectUp()) do
 		local success, reson = digF()
 		if(success == false) then
