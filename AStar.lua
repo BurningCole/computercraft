@@ -263,49 +263,55 @@ function RemoveBranch(node,routeData,depth)
 	end
 	node.to = nil;
 	
-	if(Astar.detected[node.x..","..node.y..","..node.z] ~= true) then
-		local bestNeighbour;
-		local bestDistance = 9999999;
-		local neighbour = visited[node.x..","..(node.y-1)..","..node.z..","..node.dir];
-		if(neighbour ~= undefined and neighbour.d<bestDistance and #neighbour.to > 0) then
-			bestNeighbour = neighbour;
-			bestDistance = neighbour.d;
+	local decx = detected[node.x];
+	if(decx ~= nil) then
+		local decxy = decx[node.y];
+		if(decxy ~= nil and decxy[node.z]==true) then
+			return;
 		end
-		neighbour = visited[node.x..","..(node.y+1)..","..node.z..","..node.dir];
+	end
+	
+	local bestNeighbour;
+	local bestDistance = 9999999;
+	local neighbour = visited[node.x..","..(node.y-1)..","..node.z..","..node.dir];
+	if(neighbour ~= undefined and neighbour.d<bestDistance and #neighbour.to > 0) then
+		bestNeighbour = neighbour;
+		bestDistance = neighbour.d;
+	end
+	neighbour = visited[node.x..","..(node.y+1)..","..node.z..","..node.dir];
+	if(neighbour ~= undefined and neighbour.d<bestDistance and #neighbour.to > 0) then
+		bestNeighbour = neighbour
+		bestDistance = neighbour.d;
+	end
+	if(node.dir == 0) then
+		neighbour = visited[(node.x-1)..","..node.y..","..node.z..","..node.dir];
+		if(neighbour ~= undefined and neighbour.d<bestDistance and #neighbour.to > 0) then
+			bestNeighbour = neighbour
+		bestDistance = neighbour.d;
+		end
+		neighbour = visited[(node.x+1)..","..node.y..","..node.z..","..node.dir];
 		if(neighbour ~= undefined and neighbour.d<bestDistance and #neighbour.to > 0) then
 			bestNeighbour = neighbour
 			bestDistance = neighbour.d;
 		end
-		if(node.dir == 0) then
-			neighbour = visited[(node.x-1)..","..node.y..","..node.z..","..node.dir];
-			if(neighbour ~= undefined and neighbour.d<bestDistance and #neighbour.to > 0) then
-				bestNeighbour = neighbour
-			bestDistance = neighbour.d;
-			end
-			neighbour = visited[(node.x+1)..","..node.y..","..node.z..","..node.dir];
-			if(neighbour ~= undefined and neighbour.d<bestDistance and #neighbour.to > 0) then
-				bestNeighbour = neighbour
-				bestDistance = neighbour.d;
-			end
-		else
-			neighbour = visited[node.x..","..node.y..","..(node.z-1)..","..node.dir];
-			if(neighbour ~= undefined and neighbour.d<bestDistance and #neighbour.to > 0) then
-				bestNeighbour = neighbour
-				bestDistance = neighbour.d;
-			end
-			neighbour = visited[node.x..","..node.y..","..(node.z+1)..","..node.dir];
-			if(neighbour ~= undefined and neisghbour.d<bestDistance and #neighbour.to > 0) then
-				bestNeighbour = neighbour
-				bestDistance = neighbour.d;
-			end
-		end
-		neighbour = visited[node.x..","..node.y..","..node.z..","..(1-node.dir)];
+	else
+		neighbour = visited[node.x..","..node.y..","..(node.z-1)..","..node.dir];
 		if(neighbour ~= undefined and neighbour.d<bestDistance and #neighbour.to > 0) then
 			bestNeighbour = neighbour
+			bestDistance = neighbour.d;
 		end
-		if(bestNeighbour ~= nil) then
-			AddNewNode(node.x,node.y,node.z,node.dir,bestNeighbour,routeData);
+		neighbour = visited[node.x..","..node.y..","..(node.z+1)..","..node.dir];
+		if(neighbour ~= undefined and neisghbour.d<bestDistance and #neighbour.to > 0) then
+			bestNeighbour = neighbour
+			bestDistance = neighbour.d;
 		end
+	end
+	neighbour = visited[node.x..","..node.y..","..node.z..","..(1-node.dir)];
+	if(neighbour ~= undefined and neighbour.d<bestDistance and #neighbour.to > 0) then
+		bestNeighbour = neighbour
+	end
+	if(bestNeighbour ~= nil) then
+		AddNewNode(node.x,node.y,node.z,node.dir,bestNeighbour,routeData);
 	end
 end
 
@@ -347,7 +353,7 @@ function FollowRoute(route)
 			
 			local rotatedNodeCode = nextNode.x..","..nextNode.y..","..nextNode.z..","..(1-nextNode.dir);		
 			RemoveBranch(nextNode,route,0);
-			RemoveBranch(nodes[rotatedNodeCode],route,0);
+			RemoveBranch(backNodes[rotatedNodeCode],route,0);
 			
 			RecalculateNodeDists(route);
 			route,reason = UpdateRoute(route);
