@@ -1,4 +1,19 @@
-local AStar = require("AStar")
+function tryRequire(libraryName)
+	local loaded, library = pcall(require,"AStar");
+	if(loaded) then 
+		return library;
+	end
+	return setmetatable(library, { 
+		__index = function(lib,key)
+			if(lib[key] ~= nil) then return lib[key] end
+			return function() end;
+		end
+	});
+end
+
+local loaded, AStar = pcall(require,"AStar");
+if(not loaded) then 
+	AStar = {}; end
 
 local run = true;
 local replyChannel = 51;
@@ -164,9 +179,9 @@ function getRelative(direction)
 	local nx,ny,nz = x,y,z;
 	if(direction == 0) then
 		nx = nx + 1;
-	elseif(direction == 1)
+	elseif(direction == 1) then
 		nz = nz + 1;
-	elseif(direction == 2)
+	elseif(direction == 2) then
 		nx = nx - 1;
 	else
 		nz = nz + 1;
@@ -283,7 +298,7 @@ commands = {
 		local slot = (((tonumber(getPocketInput("insert slot number 1-16")) or turtle.getSelectedSlot())-1)%16)+1; 
 		turtle.select(slot);
 		local data = turtle.getItemDetail();
-		if(data == nil)then return slot .. ": empty"
+		if(data == nil)then return slot .. ": empty" end
 		return slot .. ": \"".. data.name .."\" x"..data.count;
 	end,
 	inv = function() 
@@ -306,11 +321,11 @@ commands = {
 	run = function()
 		local functionString = getPocketInput("Insert function body");
 		local success, data = pcall (load(functionString));
-		if(success){
+		if(success) then
 			return data;
-		}else{
+		else
 			return "error encountered";
-		}
+		end
 	end,
 	stop = function() run=false; return true; end
 };
