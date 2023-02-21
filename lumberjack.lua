@@ -1,3 +1,4 @@
+local forceMove = require("forceMove");
 
 local width = 3;	--saplings per row
 local height = 3;	--saplings per column
@@ -46,40 +47,6 @@ else
 	turnB = turtle.turnRight;
 end
 
-
-local forceMove = {
-	forward = function() 
-		while(not turtle.forward()) do
-			turtle.dig();
-			sleep(0.2);
-		end
-	end,
-	up = function() 
-		while(not turtle.up()) do
-			turtle.digUp();
-			sleep(0.2);
-		end
-	end,
-	down = function() 
-		while(not turtle.down()) do
-			turtle.digDown();
-			sleep(0.2);
-		end
-	end,
-	back = function()
-		if(not turtle.back()) then
-			turtle.turnLeft();
-			turtle.turnLeft();
-			repeat
-				turtle.dig();
-				sleep(0.2);
-			until(turtle.forward())
-			turtle.turnLeft();
-			turtle.turnLeft();
-		end
-	end,
-};
-
 function findAny(strings, inString)
 	if(inString == nil) then 
 		return false; 
@@ -99,7 +66,7 @@ function mineDepth(toMine,back)
 	};
 	repeat
 		local currentNode = minedPath[#minedPath];
-		if(currentNode.side == 0) then -- check up
+		if(currentNode.side == 2) then -- check up
 			local check, data = turtle.inspectUp();
 			if(check and findAny(toMine,data.name)) then
 				turtle.digUp();
@@ -145,7 +112,7 @@ function nextTree()
 		end
 	elseif(dir == 1 and height>1) then 
 		y=y+1;
-		if(x<=0)then
+		if(x<=1)then
 			turnB();
 			dir = 0;
 		else
@@ -185,6 +152,7 @@ function refuel()
 	local repeats = 0;
 	while(turtle.getFuelLevel() < maxFuel) do
 		while(not turtle.suck()) do
+			turtle.drop();
 			if(repeats > 0) then
 				if((repeats%10) == 0) then
 					print("Failed to get fuel ("..repeats..") please press a key to continue reattempting");
@@ -195,15 +163,15 @@ function refuel()
 				end
 			end
 			repeats = repeats + 1;
-			turtle.drop();
 		end
-		turtle.refuel();
+		turtle.refuel(1);
+		turtle.dropUp();
 		print("Fuel "..turtle.getFuelLevel().."/"..maxFuel);
 	end
 end
 
 function dropLogs()
-	for i=1,16 do
+	for i=2,16 do
 		turtle.select(i);
 		local repeats = 0;
 		while(turtle.getItemCount()>0) do
@@ -227,7 +195,7 @@ refuel();
 turnA();
 while true do
 	local detect, data = turtle.inspect();
-	if(not detect or findAny(treeStrings,data.name)) then
+	if(not detect or findAny(treeStrings,data.name) or redstone.getInput("bottom")) then
 		turtle.select(1)
 		forceMove.up();
 		turtle.dig();
