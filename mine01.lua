@@ -1,6 +1,8 @@
+local forceMove = require("forceMove.lua");
+
 local x = 0; y=0; z=0;
 local w = 15; h=10; l=15;
-local yOff = 60
+local yOff = 1
 local dir = 0;
 local done = false;
 
@@ -13,17 +15,54 @@ if(arg[1] ~= nil) then
 	end
 end
 
+fuelThreshold = 5000;
+
+function refuel()
+	if(turtle.getFuelLevel() > fuelThreshold)then 
+		return 
+	end
+	local maxFuel = turtle.getFuelLimit()-1000;
+	maxFuel = math.min(fuelThreshold*2,maxFuel);
+	for i=1,16 do
+		if(turtle.getItemCount(i) == 0) then
+			turtle.select(i);
+			break;
+		end
+	end
+	local repeats = 0;
+	while(turtle.getFuelLevel() < maxFuel) do
+		while(not turtle.suck()) do
+			if(repeats > 0) then
+				if((repeats%10) == 0) then
+					print("Failed to get fuel ("..repeats..") please press a key to continue reattempting");
+					os.pullEvent("key");
+				else
+					print("Failed to get fuel ("..repeats..") reattempting...");
+					sleep(5);
+				end
+			end
+			repeats = repeats + 1;
+			turtle.drop();
+		end
+		turtle.refuel();
+		turtle.dropUp();
+		print("Fuel "..turtle.getFuelLevel().."/"..maxFuel);
+	end
+end
+
 print("mine");
 print(w,h,l);
 
-
-for i=1,yOff do
-	turtle.down()
+if(turtle.getFuelLevel() < fuelThreshold) then
+	turtle.turnLeft();
+	turtle.turnLeft();
+	refuel();
+	turtle.turnLeft();
+	turtle.turnLeft();
 end
 
---TODO
-function refuel()
-	print("do later");
+for i=1,yOff do
+	forceMove.down()
 end
 
 function dig()
@@ -61,7 +100,7 @@ end
 function move(x,y,z)
 	if(x+y+z>0) then
 		for i = 1,(y*3) do
-			turtle.up()
+			forceMove.up()
 		end
 		for i=1,dir do
 			turtle.turnLeft()
@@ -69,27 +108,27 @@ function move(x,y,z)
 	end
 	if(x>0) then
 		for i=1,x do
-			turtle.back()
+			forceMove.back()
 		end
 	else
 		for i=1,-x do
-			turtle.forward()
+			forceMove.forward()
 		end
 	end
 	turtle.turnLeft()
 	if(z>0) then
 		for i=1,z do
-			turtle.forward()
+			forceMove.forward()
 		end
 	else
 		for i=1,-z do
-			turtle.back()
+			forceMove.back()
 		end
 	end
 	turtle.turnRight()
 	if(x+y+z<0) then
 		for i = 1,(-y*3) do
-			turtle.down()
+			forceMove.down()
 		end
 		for i=1,dir do
 			turtle.turnRight()
@@ -99,7 +138,7 @@ end
 
 while(done ~= true) do
 	dig()
-	turtle.forward()
+	forceMove.forward()
 	digUp()
 	digDown()
 	print(x,y,z)
@@ -157,7 +196,7 @@ while(done ~= true) do
 			dir = (dir+3)%4 
 		end
 		for i = 1,3 do
-			turtle.down()
+			forceMove.down()
 			digDown()
 		end
 		print(x,y,z)
@@ -166,14 +205,21 @@ while(done ~= true) do
 	if(turtle.getItemCount(15)>0) then
 		move(x,y,z)
 		for i=1,yOff do
-			turtle.up()
+			forceMove.up()
 		end
-		for i=16,3,-1 do
-			turtle.select(i)
-			turtle.dropUp()
+		for i=16,1,-1 do
+			turtle.select(i);
+			turtle.dropUp();
+		end
+		if(turtle.getFuelLevel() < fuelThreshold) then
+			turtle.turnLeft();
+			turtle.turnLeft();
+			refuel();
+			turtle.turnLeft();
+			turtle.turnLeft();
 		end
 		for i=1,yOff do
-			turtle.down()
+			forceMove.down()
 		end
 		move(-x,-y,-z)
 	end
@@ -181,5 +227,9 @@ end
 print(x,y,z)
 move(x,y,z)
 for i=1,yOff do
-	turtle.up()
+	forceMove.up()
+end
+for i=16,1,-1 do
+	turtle.select(i);
+	turtle.dropUp();
 end
