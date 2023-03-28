@@ -7,12 +7,15 @@ local totalSlots = {total = 0};
 local resultChest = "reinfchest:gold_chest_0";
 local storageFile = "config/preCompiledInventory.cnf"
 local debugScreen = peripheral.find("monitor");
+
 if(debugScreen) then
 	debugScreen.setTextScale(0.5)
 end
 
 local storagePeripherals = {"minecraft:chest","reinfchest:gold_chest"};
 local genericChest = "minecraft:chest";
+
+local outputInventory = nil;
 
 function chestIsStorage(chestId)
 	return not userInterfaceChestIds[chestId];
@@ -163,6 +166,9 @@ end
 
 function StoreItem(fromChestId,slot)
 	local chest = userInterfaceChests[fromChestId];
+	if(fromChestId == "player" or fromChestId == "output") then
+		chest = outputInventory;
+	end
 	if(chest == nil) then
 		printDebug("chest "..fromChestId.." doesn't exist");
 		return false;
@@ -176,6 +182,9 @@ function StoreItem(fromChestId,slot)
 	if(itemStore ~= nil) then
 		local existingStack = itemStore.total % itemStore.stackSize;
 		local pushToExisting = math.min(itemStore.stackSize - existingStack,item.count);
+		if(item.count == itemStore.stackSize)then
+			pushToExisting = 0;
+		end
 		local pushToNew = item.count - pushToExisting;
 		for key, chestdetail in pairs(itemStore) do
 			local storageChest = storageChests[key];
@@ -230,6 +239,10 @@ function StoreItem(fromChestId,slot)
 end
 
 function FetchItem(toChestId,itemName, count)
+	local fetchChest = userInterfaceChests[toChestId];
+	if(toChestId == "player" or toChestId == "output") then
+		fetchChest = outputInventory;
+	end
 	printDebug("Fetching: "..itemName.."*"..count);
 	if(userInterfaceChests[toChestId] == nil) then
 		printDebug("Error: invalid chest");
@@ -241,17 +254,23 @@ function FetchItem(toChestId,itemName, count)
 	end
 	local itemStore = items[itemName];
 	local existingStack = itemStore.total % itemStore.stackSize;
-	local fetchChest = userInterfaceChests[toChestId];
 	local firstAllowedSlot = 2*fetchChest.size()/3+1;
 	local fetchChestItems = fetchChest.list();
 	local empty = {};
-	for i = firstAllowedSlot,fetchChest.size() do
-		if(fetchChestItems[i] == nil) then
-			empty[#empty+1] = i;
+	if(outputInventory == fetchChest) then
+		empty[1] = {nil,99999};
+	else
+		for i = fetchChest.size(),firstAllowedSlot,-1 do
+			local slotItem = fetchChestItems[i];
+			if(slotItem == nil or slotItem.name == itemName and slotItem.count < itemStore.stackSize) then
+				empty[#empty+1] = {i,itemStore.stackSize};
+			elseif(slotItem.name == itemName and slotItem.count < itemStore.stackSize) then
+				empty[#empty+1] = {i,itemStore.stackSize - slotItem.count};
+			end
 		end
-	end
-	if(#empty == 0)then
-		return false;
+		if(#empty == 0)then
+			return false;
+		end
 	end
 	local remaining = count - existingStack;
 	for key, chestdetail in pairs(itemStore) do
@@ -260,38 +279,58 @@ function FetchItem(toChestId,itemName, count)
 			if(existingStack > 0 and chestdetail>0 and chestdetail % itemStore.stackSize ~=0 ) then
 				local existingStackLoc = findIncompleteStack(storageChest,itemName,itemStore.stackSize);
 				if(existingStackLoc) then
-				local moved = storageChest.pushItems(toChestId,existingStackLoc,math.min(existingStack,count),table.remove(empty));
-				if(#empty == 0)then
-					return false;
-				end
-				printDebug("Fetched "..moved.." From "..key);
-				itemStore[key] = itemStore[key] - moved;
-				itemStore.total = itemStore.total - moved;
-				emptySlots.total = emptySlots.total +1;
-				emptySlots[key] = emptySlots[key] +1;
-				printDebug("remaining "..itemStore[key].." / "..itemStore.total);
-				existingStack = 0;
-				if(itemStore[key] <= 0) then
-					itemStore[key] = nil;
-					if(itemStore.total <= 0) then
-						items[itemName] = nil;
-						return true, remaining;
+					while(existingStack>0) do
+						if(#empty == 0)then
+							return false;
+						end
+						local extractSlot = empty[#empty];
+						local removecount = math.min(existingStack,count);
+						local moved = fetchChest.pullItems(key,existingStackLoc,removecount,extractSlot[1]);
+						if(extractSlot[2]>moved and moved >= removecount)then
+							extractSlot[2] = extractSlot[2] - moved;
+						else
+							table.remove(empty);
+						end
+						existingStack = existingStack - moved;
+						if(moved == 0 or moved == count)then
+							existingStack = 0;
+						end
+						itemStore[key] = itemStore[key] - moved;
+						itemStore.total = itemStore.total - moved;
+						printDebug("Fetched "..moved.." From "..key);
+						if(existingStack == moved) then
+							emptySlots.total = emptySlots.total +1;
+							emptySlots[key] = emptySlots[key] +1;
+						end
 					end
-				end
-				if(remaining <= 0) then
-					return true;
-				end
+					printDebug("remaining "..itemStore[key].." / "..itemStore.total);
+					if(itemStore[key] <= 0) then
+						itemStore[key] = nil;
+						if(itemStore.total <= 0) then
+							items[itemName] = nil;
+							return true, remaining;
+						end
+					end
+					if(remaining <= 0) then
+						return true;
+					end
 				end
 			end
 			if(remaining > 0) then
 				local storedItems = storageChest.list();
 				for slot, item in pairs(storedItems) do
 					local ref = item.name..(item.nbt or "");
-					if(ref == itemName) then 
-						local moved =storageChest.pushItems(toChestId,slot,math.min(remaining,itemStore.stackSize),table.remove(empty));
-						if(#empty == 0)then
-							return false;
+					if(ref == itemName) then
+						local removecount = math.min(remaining,itemStore.stackSize);
+						local extractSlot = nil;
+						for _,v in ipairs(empty) do
+							if(v[2]>=removecount) then
+								extractSlot = v[1];
+								v[2] = v[2]-removecount;
+								break;
+							end
 						end
+						local moved =fetchChest.pullItems(key,slot,removecount,extractSlot);
 						if(moved == itemStore.stackSize)then
 							emptySlots.total = emptySlots.total +1;
 							emptySlots[key] = emptySlots[key] +1;
@@ -421,6 +460,16 @@ function readInventoriesFile()
 	configFile.close();
 end
 
+for _,manipulator in ipairs({peripheral.find("manipulator")}) do
+	printDebug("checking: "..peripheral.getName(manipulator));
+	if(manipulator.hasModule("plethora:introspection")) then
+		outputInventory = manipulator.getInventory();
+		resultChest = "output";
+		printDebug("inventory Found");
+		break;
+	end
+end
+
 if(fs.exists(storageFile)) then
 	--read inventories;
 	readInventoriesFile();
@@ -469,10 +518,7 @@ local textboxLengths = {terminalSize[1]-2,4};
 --						x,y,width,         height
 local itemListBounds = {1,3,terminalSize[1],terminalSize[2]-7};
 
-local textUpdateTimer = nil;
 local textRemoved = false;
-
-local storeItemTimer = os.startTimer(10);
 
 local itemListW = {
 	terminalSize[1] - 8;
@@ -720,6 +766,38 @@ function updateFilter()
 	textRemoved = false;
 end
 
+local modemMessages = {
+	["List"] = function(filter)
+		local data = {};
+		for id,data in pairs(items) do
+			if(filter == nil or id:find(filter) or data.displayName:lower():find(filter) then
+				data[id] = {
+					displayName = data.displayName;
+					count = data.total;
+				}
+			end
+		end
+		return data;
+	end,
+	["Fetch"] = function(item,count)
+		if(outputInventory) then
+			return FetchItem("player",item,slot);
+		else
+			return false;
+		end
+	end,
+	["Store"] = function(slot)
+		if(outputInventory) then
+			return StoreItem("player",slot);
+		else
+			return false;
+		end
+	end,
+	["Ping"] = function()
+		return 
+	end
+}
+
 local runActions = {
 	["mouse_click"] = function(ev,peripheral,x,y)
 		printDebug("Pressed: "..x..","..y);
@@ -788,6 +866,7 @@ local runActions = {
 	["paste"] = function(ev,pasted)
 		if(focusedInput == 0) then
 			searchText = searchText..pasted;
+			updateFilter();
 		elseif(focusedInput == 1) then
 			if(tonumber(pasted)) then
 				numberText = numberText..pasted;
@@ -795,31 +874,6 @@ local runActions = {
 			if(#numberText > 4) then
 				numberText = "9999";
 			end
-		end
-	end,
-	["timer"] = function(ev, id)
-		if(id == textUpdateTimer) then
-			updateFilter();
-		elseif(id == storeItemTimer) then
-			local moved = false
-			for key, chest in pairs(userInterfaceChests) do
-				local items = chest.list();
-				local chestSize = chest.size();
-				for i = 1,(2*chestSize/3) do
-					if(items[i] ~= nil) then
-						StoreItem(key,i);
-						moved = true;
-					end
-				end
-			end
-			if(moved) then
-				drawItemList();
-				storeItemTimer = os.startTimer(5);
-			else
-				storeItemTimer = os.startTimer(15);
-			end
-		else
-			printDebug("timer:"..id.." not "..(textUpdateTimer or "empty"))
 		end
 	end,
 	["peripheral"] = function(ev,name)
@@ -832,6 +886,26 @@ local runActions = {
 		if(storageChests[name]) then
 			removeConnectedInventory(name);
 		end
+	end,
+	["modem_message"] = function(ev, side, channel, replyChannel, message, distance)
+		printDebug("Recieved Request: "..message)
+		local method = message.match("^[^!]+")
+		local submessages = {};
+		for submessage in message.gmatch("!([^!]+)") do
+			submessages[#submessages] = submessage;
+		end
+		if(modemMessages[method]) then
+			local returnData = nil;
+			if(#submessages) then
+				returnData =modemMessages[method](table.unpack(submessages))
+			else
+				returnData = modemMessages[method]();
+			end
+			if(type(returnData)=="table") then
+				returnData = textutils.serialise(returnData,{ compact = true });
+			end
+			peripheral.call(side,"transmit",replyChannel,channel,returnData);
+		end
 	end
 };
 
@@ -841,10 +915,35 @@ drawItemList();
 drawInputBoxText();
 drawButtons();
 
-
-while true do
-	local ev = {os.pullEvent()};
-	if(runActions[ev[1]] ~= nil) then
-		runActions[ev[1]](table.unpack(ev));
+function eventLoop()
+	while true do
+		local ev = {os.pullEvent()};
+		if(runActions[ev[1]] ~= nil) then
+			runActions[ev[1]](table.unpack(ev));
+		end
 	end
 end
+
+function updateLoop()
+	while true do
+		local moved = false
+		for key, chest in pairs(userInterfaceChests) do
+			local items = chest.list();
+			local chestSize = chest.size();
+			for i = 1,(2*chestSize/3) do
+				if(items[i] ~= nil) then
+					StoreItem(key,i);
+					moved = true;
+				end
+			end
+		end
+		if(moved) then
+			drawItemList();
+			os.sleep(5);
+		else
+			os.sleep(5);
+		end
+	end
+end
+
+parallel.waitForAny(updateLoop,eventLoop);
