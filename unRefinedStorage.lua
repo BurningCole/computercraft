@@ -8,6 +8,21 @@ local resultChest = "reinfchest:gold_chest_0";
 local storageFile = "config/preCompiledInventory.cnf"
 local debugScreen = peripheral.find("monitor");
 
+local modem = nil;
+
+local listenId = 40513;
+
+for _,m in ipairs({peripheral.find('modem')}) do
+	if(m.isWireless()) then
+		modem = m;
+		break;
+	end
+end
+	
+if(modem ~= nil) then
+	modem.open(listenId);
+end
+
 if(debugScreen) then
 	debugScreen.setTextScale(0.5)
 end
@@ -192,6 +207,10 @@ function StoreItem(fromChestId,slot)
 				if(chestdetail % itemStore.stackSize ~=0 ) then
 					
 					local existingStackLoc = findIncompleteStack(storageChest,ref,itemStore.stackSize);
+					if(existingStackLoc == false) then
+						checkInventoryItems(key,true);
+						return false;
+					end
 					chest.pushItems(key,slot,pushToExisting,existingStackLoc);
 					itemStore[key] = itemStore[key] + pushToExisting;
 					itemStore.total = itemStore.total + pushToExisting;
@@ -242,12 +261,11 @@ function FetchItem(toChestId,itemName, count)
 	local fetchChest = userInterfaceChests[toChestId];
 	if(toChestId == "player" or toChestId == "output") then
 		fetchChest = outputInventory;
-	end
-	printDebug("Fetching: "..itemName.."*"..count);
-	if(userInterfaceChests[toChestId] == nil) then
+	elseif(userInterfaceChests[toChestId] == nil) then
 		printDebug("Error: invalid chest");
 		return false, "invalid chest";
 	end
+	printDebug("Fetching: "..itemName.."*"..count);
 	if(items[itemName] == nil) then
 		printDebug("Error: item doesn't exist");
 		return false, "No items";
@@ -314,6 +332,8 @@ function FetchItem(toChestId,itemName, count)
 					if(remaining <= 0) then
 						return true;
 					end
+				else
+					checkInventoryItems(key,true);
 				end
 			end
 			if(remaining > 0) then
@@ -478,7 +498,6 @@ else
 	--printItemCounts();
 end
 checkConnectedInventories();
-writeInventoryFile();
 
 -- user interface
 
@@ -761,6 +780,9 @@ function updateFilter()
 		table.sort(filteredItems,function(a,b) return a.item.total > b.item.total; end);
 	end
 	printDebug("Filtering "..searchText);
+	if(#filteredItems == 0 and #searchText == 0) then
+		return;
+	end
 	drawItemList();
 	textUpdateTimer = nil;
 	textRemoved = false;
@@ -768,25 +790,39 @@ end
 
 local modemMessages = {
 	["List"] = function(filter)
-		local data = {};
+		local returnData = {["Empty"]=emptySlots.total,["Total"]=totalSlots.total};
+		local count = 0;
+		printDebug("Parsed command: List filter="..(filter or "None"));
 		for id,data in pairs(items) do
-			if(filter == nil or id:find(filter) or data.displayName:lower():find(filter) then
-				data[id] = {
+			if(filter == nil or id:find(filter) or data.displayName:lower():find(filter)) then
+				returnData[id] = {
 					displayName = data.displayName;
 					count = data.total;
 				}
+				count = count + 1;
 			end
 		end
-		return data;
+		printDebug("Found "..count.." items");
+		return returnData;
 	end,
 	["Fetch"] = function(item,count)
+		count = tonumber(count);
+		if(item == nil or count == nil) then
+			return "false";
+		end
+		printDebug("Parsed command: Fetch "..(item or "Nothing").." * "..(count or 0));
 		if(outputInventory) then
-			return FetchItem("player",item,slot);
+			return FetchItem("player",item,count);
 		else
 			return false;
 		end
 	end,
 	["Store"] = function(slot)
+		slot = tonumber(slot);
+		if(slot == nil) then
+			return "false";
+		end
+		printDebug("Parsed command: Store from "..(slot or "Nowhere"));
 		if(outputInventory) then
 			return StoreItem("player",slot);
 		else
@@ -794,7 +830,7 @@ local modemMessages = {
 		end
 	end,
 	["Ping"] = function()
-		return 
+		return "Pong"
 	end
 }
 
@@ -889,10 +925,11 @@ local runActions = {
 	end,
 	["modem_message"] = function(ev, side, channel, replyChannel, message, distance)
 		printDebug("Recieved Request: "..message)
-		local method = message.match("^[^!]+")
+		local method = message:match("^[^!]+");
 		local submessages = {};
-		for submessage in message.gmatch("!([^!]+)") do
-			submessages[#submessages] = submessage;
+		for submessage in message:gmatch("!([^!]+)") do
+			submessages[#submessages +1] = submessage;
+			printDebug("arg["..#submessages.."]: "..submessage);
 		end
 		if(modemMessages[method]) then
 			local returnData = nil;
