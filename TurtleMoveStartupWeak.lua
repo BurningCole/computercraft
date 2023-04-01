@@ -41,10 +41,11 @@ else
 	dir=3
 	print("Facing: South")
 end
-print("check")
+
 for i=1,dir do
 	turtle.turnLeft()
 end
+
 local forward=function(n)
 	print("forward ",n);
 	if(n<0) then
